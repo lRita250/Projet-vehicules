@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Client SOAP et Carte</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+
+<h2>Calculateur de Temps de Trajet</h2>
+<form action="/" method="post">
+    <label for="distance">Distance (km):</label>
+    <input type="number" id="distance" name="distance" required>
+    <br><br>
+    <label for="autonomie">Autonomie du véhicule (km):</label>
+    <input type="number" id="autonomie" name="autonomie" required>
+    <br><br>
+    <label for="tempsChargement">Temps de chargement (min):</label>
+    <input type="number" id="tempsChargement" name="tempsChargement" required>
+    <br><br>
+    <button type="submit">Calculer</button>
+</form>
+
+<h3>Résultat :</h3>
+<p id="resultat">{{ resultat }}</p>
+
+<h2>Choisir un Véhicule</h2>
+<form action="/" method="post">
+    <label for="vehicule_id">Véhicule:</label>
+    <select name="vehicule_id" id="vehicule_id">
+        {% for vehicule in vehicules %}
+        <option value="{{ vehicule.id }}"> {{ vehicule.naming.make }} {{ vehicule.naming.model }} {{ vehicule.naming.chargetrip_version }} - Autonomie: {{ vehicule.range.chargetrip_range.best }} km</option>
+        {% endfor %}
+    </select>
+</form>
+
+<h2>Choisissez les villes de départ et d'arrivée</h2>
+<form action="/afficher_carte" method="post">
+    <label for="start_city">Ville de départ:</label>
+    <input type="text" id="start_city" name="start_city" required>
+    <br><br>
+    <label for="end_city">Ville d'arrivée:</label>
+    <input type="text" id="end_city" name="end_city" required>
+    <br><br>
+    <button type="submit">Afficher</button>
+</form>
+
+<h3>Carte :</h3>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<script>
+    var map = L.map('map').setView([46.603354, 1.888334], 6);  // Centre sur la France
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    {% if start_coords and end_coords %}
+        var startMarker = L.marker([{{ start_coords[0] }}, {{ start_coords[1] }}]).addTo(map)
+        .bindPopup("Départ: {{ request.form['start_city'] }}");
+        var endMarker = L.marker([{{ end_coords[0] }}, {{ end_coords[1] }}]).addTo(map)
+        .bindPopup("Arrivée: {{ request.form['end_city'] }}");
+    {% endif %}
+    
+    {% if route_coords %}
+        var latlngs = {{ route_coords|tojson }};
+        var polyline = L.polyline(latlngs, {color: 'blue'}).addTo(map);
+    {% endif %}
+
+    var borneIcon = L.icon({
+        iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOAAAADhCAMAAADmr0l2AAAAqFBMVEWJvij///+DvBaLvSm/2pXA2ZbE3Z///vzw9uaKvCGIvyiIviqGvBn1+e////yLviePwDTZ6cGjy2CgyVmCugC62ovw9uT+/P////mDugD8//7m8NOAuwD2+O2JwCT4+/Wr0HHr9t6Tw0Lj8M662YzK4qjd6sStznOaxUzT57bX6r/M4aWpy2O11H6UwkSTwzq12HyWx0d2tQDL3KjS6bfg7tTy+eKu0msGSbXaAAAQpElEQVR4nO1dCXvbKBMW4AQLEHJsxTrs4DtxTn/dtun//2cfIN9HBJLVYrfvs7vPto0pr4cZZoZh8MCVw/vTE6gb/wheOv4RvHT8NQQfb68Mj3sEp1EErwn9Kch2CDYgQt4Vgd3sSVASFOEVATYOCHpXJUF4A/A+wavC30CQXzvBq5fgP4IXDdd1ULRCvWsRFJYbwHUJhh4lLA0RE6TcAK4TRB71738+NCcdRksN4DpBL4QzOassllEAWbpYlApKTOk6T9CDIzWtJAZtpn9NPR8hQU1V0nUjg8R4oKYVZ+Dd12oYhh6EETNVSdcliOCTnhbneC60JSX+8Hk0afjCbADXCXpsFstZ4TgJlkKDL3qeny1CTKToOkGa9vS0EnCX6t8gfpBPtOsbhXWu66C3GCwndp9PTHSWEwZyyRp83nUJShXUfDCYL1fo7XLCcsleBcHZmo+yKohGveVEJ5HRVug6wXSUG9F4EikJIppmy4nOzHIrjusgQXwpgHxeoVTBJTpGKui2BAllTyDO59fO9z12qwUK+MA32+qdJugRqYL5AktyPijViWqMQS81y/65TVCpYE6wF3nKplCmd40Mg1fDBLXTBGWsm4Cc4S3UBEV7tWv8kvI1GcNpI4PYcGVS3oi2KbChTxo4DsaG3rbTEvR0LKgmOFjkNjOa8NzIjJjpEC4TJGy0JDjKNz2Clo4oeDadptMExTjng8F3qEMl0eZ618Dg3UKC7uqgVEGcr8glH7Y8KsJ8bjqG0xJc7oIYDD7y30gnSyPaTC86J7MykOyntpkZ+FwuSNTk+Xp7iUzHco8gQbCziKAgVKpgPjfwoiZFEZmvdo2GqQo6SDCEbwA0f7wv0mi4im2nalIIrU9rZbBrOpx7RgbBIMnUt979/rL88pNvms8mFgwi40IC9yTojaXS4TifjQ7+eNBXwXtI4Cp98dhHl5s2JP8Dq5h2ifiORdAjof9trYLQuI7APYLRM9hDApqPt2MGYV4Rgk3zTRru6WB/tPzK18h/2b0bTvT/cPAAQ+OTGPckyDjfIwh2GGO+Cg4vMx4UHRWvf4UE3PYhE7RldP7iHEHWOE1tuULjQW/WSZUvYDCeczoobQwvYqh+gPduOsjAn3FLgtQjsFkgwS0EjeJTNLcIeogsgtOE9oAT8OYXjegWQeptsjDF/EDMe2nRkNUIIoRCVKnaUQ2wqRChm+pHE2Qqf19MsLyRMTuC/HIEFfttNm1J8MWCIAfDQjNTSYJULinpQcl/v/rn6z+U//XJas9GwrewMRLFgX0VgqjP2veNyrhvw2i5SEM6/nqT38Moqs2KIuEx9Gxu8b4CHswWTC/UkPyy+uQMFnozpXWQplPA47MQlM4XaOjzTQ++Wn3wrTiqKCtBymS4HfPs9F9uDq7+edHmIu0V//gGQVjsjpYjiEg6k259gU9lgYyD50ilsgPjMeW0e7A4sC9FEHniTa2r86IdEm9hPqwMqm7rIih9/m5RUGOPbkrE+36wexJYLuu2QIXZtVJGRtBfxhMxhZzwkPUP0hVffUKqIDGxoiUkqCZyboYAPPejETY1W/IHJyZTLUcQWhk7U4wiNigKBjcEObgxSW+XI8jsHCpDNGHHYmFw0DFJb5fSQXSEIB9Y4kBUuJneW5guHBidT5SToN9d/zV6n/58HY5blhgPb3WCkK82Bt6NZmpDNCU4KYwFKxBcS1CqAgimMiwgdvCokIHENABJvJKZFEmHG+sgMFPBcgTJFkGAewtd9mcf6hICFz2QrBflA4ueLYyz2QlTVYIgHiEZ0CGqokMbqB0MUeqPwNpjbzKCzN2/gdEKLWdktgkGH8ZHdccgPjZ57CZT1aCmMFPB6hJswEoESbqh1FRKZRxiTll9qfstgoFf7kLKCmhdg60ICmSedPrQelE7wZeo2N/9ciga3W1LUDDprRUbGix/mJpW/FbSwXthfpJ1DCGC0w1BIn2IJ7B/AHqIBOPHyOzyS1UJvgmjhXIaSLS3Jeh5Uc8gT4CzoeFlraoE28z4tPzUYOsiZU2QqvOzQoIDlRCtryh9m6BhZfHpscQuQS/sP4KvEOOYdz9s6mQq6eD5CSL48aUE5b45YeaGzT0JSoazL0XIb1OVIjYc30GCoTcenFJDLl3yp4giz/hGr4ME9fWdE8m1DEj1s/obnSRI2EmHTaofNS+S8Vw0Mgrsfyf4varlaXXj3EkJel7a3SUm3TdpPfF733p8NwmSaLIvOwzi5rzE8bqbBD22760lMXgMja9eb8FNHRRPe/zk+pwxUabbg5sSPNzq8ZOxc7YLJwmS9CDv+tw3860P4CbBD77vygxFyajFSYKwsePJYMCDllfGwniOGpl0oqzmGtLC9GR4W64bmpMSRLvbvNwybkr363OSoIc6t738JI3rGwbgTZRtZ+cmQY8xlj7r4teYgyR5KF8z5qQOKohoJKnF3ZGMDeOJ8VWlAzgqQYlFoGZ2Ey3en7vT8jWeZyBYsl3WEiE5IcG2PivsCA9GfoXMXXWCFZtZohMSZPdqf+BVk5Jn0MFqBFG4n/hdTUzbmFHl+uOqEjRNMJ9EKH4dJdjvKYKPf5zgzPya1FEgtCkw3F2izUwPX2l0rzpBuYYqGRnkb7ITOwRbOu80LRkkbVD5APSt2hLV9z2PECRzPa1hpbM5hapGJulGxDNuU7cLSuUmkfcC2CeobSvGZrU+X6KqBGMwS1FJQxqGlEavm8hoW4LsTW6DHMwLL34UoXIZCc4akSgnwRCpuujtKovNn7EhyLKMj6t5EV5lghjL7//Ot8umryAge9ZyOkbwSQYS2WBRZtwdVC4jURjcLPwIRlaQDti48bAzzB5BgLNkfA6C1ayoMjQc4O7kzhITGSfEO7V3hwSxEwS5mmeZCu4Y7J7GHxDE+JsLBJewrwDev6u7Z0XVHxs3HfkNBKtjZ6Pv6O2j/cc3+roIeuNBZtMX5yuCTkrQow9KQc1qQi+SINTRxF3fsLvYBRKc5Jd3KrHzHNbBfGKDc6QsHJXgE8hMrw5cJEHyMVDH8jcwrJYycJYgTZvq/tUkFa2qBN3UQaT7ymBQVQmdlaDnPemZvVfMarlLUDC9tH6mV0oQkbyYG5t3GLssgh4RKt+Wgddqe71LRuZhL/MBH2QkjQNEUIXCd5ck+MBU94/NX8Maqj5UboV25XcOE4R73T9aAYh5HCBYIblcK0G8fdOq+NZVt4VayE83B47wu/7csoFxaYL16SAGSTdHc/Rg8NMak9a6IgYt8nuiiwqHrLVKUHpa//U10qj4EzKCxzxTZ4IbEea98Hp9RwlmoMGQBns3WKI4xqobrDpUzdHK28twcGNfCPs7COL8lqZ69CoaGX0jOe7X+2GouvxmUq4dVtaS1kuwq6YaopC0bVpfbB8KSncmU63757D8y1k1bvS6GzbyRDQBxi0OdgmKVhdwHPOB+WWeA4K1SXDVU0qQObeR4P0WFyTeVFiYgOZHuc2i1iWaHw5RBG16cOwSDCmbAq4YjsakDMNarWje1o2Q9cs79gRV2NSQHkMcx6NSNUe16mBD+1jI4mr1AUEatkj0mnDpM4BembKx+iQoh+3oCVHb1h47EkQqe/FdPWuT6b5Ptqu0ziUa5N84NNnkTxL09FM9z+osLVFXC1wi+Bzlb0SMLE/W9gmGlKR3qnIbyx3E6mZWvQT5VNchszfbo8MDCcqAN/qpzhMxH9qWA9RmZKT/oVco6h9cQ7IlqCDISDMcqM3ChmN9EuQjtUkg1UKlOkFE6LjJY668Pyt+dS7RGz2S5SZ/gqBkyDoDfao9S83aM9dNUD83R9avmuiI3nC/P0aQehQ+gViZmoXVJa36NvqmjuqWXaVVoNd9MhTmMYISodoOJX5Y5brrW6K6G6P8yTj/AoMG+S8wM6cnCFKRewyDhU0quD6C70yuJBnJa+AfCybmX3+giKD0+dRomcVzIXUSDD5EiGjU1Row+aZaxZi6pKcISpXuqsxN15JgPTo4UtepWFu9rtdtq8ceUfTTMCY8SdCDDR7ndw1sCNYjQd0aE05iEEwhyV+9MmiEU0CQfGCecOmS/mmCWDeaIWwOBq8hzN3H1StRxfiiUDudqMF70DwyrIcgB0HoIUF/TMZyssv2vTMzgslXBFWiNAEJo7+tWceJScZ3ERIIzaGgrPWLUKTu/h8+lHEcjdNZUHWkJodZWDXrqMHIZHKTEPJbRsL3p4PvfZUdnXPDvn68eTpyp6E+cDLozrxF8PwSxBloERnlEBg9yZ/8RVCY72EmwPqhrBPFI2H+RKbFwX1NRqabojD00s5E3Q2Yyx0RWTWxl1p4fA2uCJp3kqqJ4AwKAlsvWYw5SJDwiGUT++GJI0Ek9F46rPlZosIlKrdihm65vl/MVU9Gb3OJrhhYvS94fBrhN13l3TEPKOqR4CDyp8vHHzHvpZRstYc7zeuh97PXewx0qXpz7h87bYENoKJeufz/7Dbx0h7JaS49s5dUOm1RcdvjuJmq2wZtleaVG2nnmCHp/0ziDDQtamfqIaikl698rqp2qfyEQbAbMNV4VJpbrNrGBkcey2Ad/QaoqiwxXaO1EJQ7XrYsqpf/+yQtgjB5yqWpM2ZUmYVMFWw3lEe2vkAfqmhipDLAOqFs8TxfrXUyUp3agh7pn3KUoCaiWo7KjyUxmMyhdILy/rrqEG6seubxeOJEPLhGot48Tj8NnqZYEmwJaZFiJXuQPY9THYsgyqLWLFCDcNBxiiB+UJ9YHPRPOUmQ+tIDelcGCks58sl0oa46offHAOvUjlWw9DskOJJ7NpuaRBJbvSyiTiAVcVlnwx8edFuLPHvfs24cV3Ot2gv0af/FjqBHmf+ikgHJdhJAe+uPjFodE9YvwRsoV10zNjii3642RCQdjkD+qszqipqURPNd3aitOW2o3hs1PKNfluyKDgYG+YoHdXSUv9cqowkC/fdRPszqDmWzgVScYdVV2JqgdKAo2W9cd4ohTlQhAloWLBWh+Z9Pdg8e/M6Pz9WfDu6GfolaEmsdDD0SDXtmBypY2vXBXHgGfpr6OpLJk79bYy+8NA2H09vG/XCRlmvobb9EiX5gziQDmIGXHghkrNsyO5SQE9ntnkY9H1EioART9VK/pYyEWryNxEet+LOPYBuATwOOciKj/m42SRcx5DYlLHdNq4SRMVRAhYBNe5BGM/DynhhVOn1WqCs8G0GDysgcUlHn7BehbPTUH5hlfaW8K3Y3OULQcqNX5w3GkCGP8Fsiejy4sHscXQckSI0lCNTbVsq5ZKYZNUXw/BKsjyAHd7qdlnkp18UR7EbKczavs6iFoLUO2iQAoQj7Fu+WXpgEJVoCLTLTQ4lLJPgE2U+LPhCXR/D1vxsQmz/Fc3kEXz6s2nhcnpHp9qxqKS9PgnFi9dLk5RHEIL5ugpa4PB10gaCtBA+7fF8VQeSp8qwzvRG9g0w9Ilm+1+3ZCIYyoo9LNakqQoKTUcVb80cJ2ukgQap3ax38VJuue7/CbdZTBO0kSBCJbprNoA583pRrsXdWgvpDDCHbFzFNHs0UlTs4nYmg8MyexrMDFaVezChAKYKK3fkFuNsl4IwE7Y/PNMmzw/LGhzlBewleEv4RvHSU1sFLwd8gwb+OILoqsJul47wmGDF4TehP9yT4eHN7XVg91LwieG1Yp7yuleAa/wheOv4RvHRcPcH/A75nhK1mw2duAAAAAElFTkSuQmCC', // Chemin vers votre image
+        iconSize: [30, 40], // Dimensions de l'icône
+        iconAnchor: [22, 94], // Point de l'icône qui correspondra géographiquement à la coordonnée du Marker
+        popupAnchor: [-3, -76] // Point à partir duquel le popup s'ouvrira
+    });
+
+    {% if stations %}
+        var stationsData = {{ stations|tojson }};
+        stationsData.forEach(function(station) {
+    var marker = L.marker([station.ylatitude, station.xlongitude], {icon: borneIcon}).addTo(map)
+    .bindPopup(station.departement + "<br>Adresse: " + station.region);
+});
+    {% endif %}
+
+</script>
+
+{% if distance %}
+    <p>Distance du trajet : {{ distance/1000 }} kilomètres</p>
+{% else %}
+    <p>Aucune distance n'a été récupérée.</p>
+{% endif %}
+
+<h3>Bornes de Recharge Proches de la Ville de Départ:</h3>
+<ul id="bornes-list">
+    {% for station in stations %}
+        <li>Departement Borne: {{ station.departement }} --- (Region: {{ station.region }}) --- Commnune: {{ station.code_insee_commune }}</li>
+    {% endfor %}
+</ul>
+
+</body>
+</html>
